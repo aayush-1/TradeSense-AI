@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: tradesense-backend
+  # Breeze test keys: use profile "local" + gitignored application-local.yml (see repo .gitignore).
+
+tradesense:
+  yahoo:
+    chart-base-url: https://query1.finance.yahoo.com/v8/finance/chart
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+  # ICICI Breeze: set enabled true and supply credentials via env (do not commit secrets).
+  # ICICI_BREEZE_API_SESSION = apisession value from https://api.icicidirect.com/apiuser/login?api_key=...
+  breeze:
+    enabled: false
+    api-key: ${ICICI_BREEZE_API_KEY:}
+    secret-key: ${ICICI_BREEZE_SECRET_KEY:}
+    api-session: ${ICICI_BREEZE_API_SESSION:}
+  storage:
+    # Relative to JVM user.dir (cwd). Example: mvn from backend/ → backend/data/ohlc/*.json ; from repo root → data/ohlc/
+    ohlc-directory: data/ohlc
+  market:
+    # Yahoo-only: set false and configure Breeze when ICICI is working again.
+    yahoo-only: true
+    breeze-then-yahoo-fallback: false
+    breeze-only: false

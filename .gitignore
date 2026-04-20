@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.DS_Store
+
+# Local OHLC JSON cache (see tradesense.storage.ohlc-directory; default is <cwd>/data/ohlc)
+data/ohlc/
+backend/data/ohlc/
+
+# Local-only secrets (Breeze); never commit
+backend/src/main/resources/application-local.yml

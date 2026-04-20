@@ -1,0 +1,8 @@
+# Fixed NSE EQ-style symbols for MVP scoring (one per line).
+# Replace or extend this list before moving to a dynamic UniverseProvider.
+
+RELIANCE
+TCS
+HDFCBANK
+INFY
+ICICIBANK
