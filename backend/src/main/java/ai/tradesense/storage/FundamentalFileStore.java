@@ -1,46 +1,46 @@
 package ai.tradesense.storage;
 
 import ai.tradesense.config.StorageProperties;
-import ai.tradesense.domain.Ohlc;
-import com.fasterxml.jackson.core.type.TypeReference;
+import ai.tradesense.domain.fundamentals.FundamentalSnapshot;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
+/**
+ * Persists one {@link FundamentalSnapshot} per symbol as pretty JSON (same filename convention as {@link OhlcFileStore}).
+ * Used for slow-changing fundamentals; refresh on a schedule separate from daily OHLC.
+ */
 @Component
-public class OhlcFileStore {
+public class FundamentalFileStore {
 
     private final Path directory;
     private final ObjectMapper objectMapper;
 
-    public OhlcFileStore(StorageProperties properties, ObjectMapper objectMapper) {
-        this.directory = properties.resolvedOhlcDirectory();
+    public FundamentalFileStore(StorageProperties properties, ObjectMapper objectMapper) {
+        this.directory = properties.resolvedFundamentalsDirectory();
         this.objectMapper = objectMapper;
     }
 
-    public List<Ohlc> load(String symbol) throws IOException {
+    public FundamentalSnapshot load(String symbol) throws IOException {
         Path file = fileFor(symbol);
         if (!Files.isRegularFile(file)) {
-            return List.of();
+            return null;
         }
         byte[] bytes = Files.readAllBytes(file);
         if (bytes.length == 0) {
-            return List.of();
+            return null;
         }
-        List<Ohlc> list = objectMapper.readValue(bytes, new TypeReference<List<Ohlc>>() {
-        });
-        return list != null ? list : List.of();
+        return objectMapper.readValue(bytes, FundamentalSnapshot.class);
     }
 
-    public void save(String symbol, List<Ohlc> bars) throws IOException {
+    public void save(String symbol, FundamentalSnapshot snapshot) throws IOException {
         Files.createDirectories(directory);
         Path file = fileFor(symbol);
         Path tmp = Path.of(file.toString() + ".tmp");
-        byte[] data = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(bars);
+        byte[] data = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(snapshot);
         Files.write(tmp, data);
         Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
     }

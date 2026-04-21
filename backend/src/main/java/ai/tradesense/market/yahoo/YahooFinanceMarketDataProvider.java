@@ -82,7 +82,7 @@ public final class YahooFinanceMarketDataProvider implements MarketDataProvider 
         }
     }
 
-    static String toYahooTicker(String nseSymbolUpper) {
+    public static String toYahooTicker(String nseSymbolUpper) {
         String s = nseSymbolUpper.trim().toUpperCase();
         if (s.endsWith(".NS")) {
             return s;
@@ -90,7 +90,7 @@ public final class YahooFinanceMarketDataProvider implements MarketDataProvider 
         return s + ".NS";
     }
 
-    static String normalizeSymbol(String symbol) {
+    public static String normalizeSymbol(String symbol) {
         if (symbol == null || symbol.isBlank()) {
             throw new IllegalArgumentException("symbol required");
         }

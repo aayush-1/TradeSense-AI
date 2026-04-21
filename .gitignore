@@ -7,5 +7,9 @@ target/
 data/ohlc/
 backend/data/ohlc/
 
+# Local fundamental snapshots (see tradesense.storage.fundamentals-directory)
+data/fundamentals/
+backend/data/fundamentals/
+
 # Local-only secrets (Breeze); never commit
 backend/src/main/resources/application-local.yml

@@ -8,20 +8,24 @@ import ai.tradesense.universe.FixedUniverseProvider;
 import ai.tradesense.universe.UniverseProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
+import java.time.Clock;
 
 @Configuration
 @EnableConfigurationProperties({
         YahooChartProperties.class,
+        FundamentalsProperties.class,
+        RecommendationStrategyProperties.class,
         CorsProperties.class,
         BreezeProperties.class,
         MarketRoutingProperties.class,
-        OhlcStorageProperties.class
+        StorageProperties.class
 })
 public class AppConfiguration {
 
@@ -29,9 +33,25 @@ public class AppConfiguration {
             "Mozilla/5.0 (compatible; TradeSense-Backend/0.1; +https://github.com/)";
 
     @Bean
-    public RestClient yahooRestClient(YahooChartProperties yahoo) {
+    public Clock clock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    @Qualifier("yahooChartRestClient")
+    public RestClient yahooChartRestClient(YahooChartProperties yahoo) {
         return RestClient.builder()
                 .baseUrl(yahoo.chartBaseUrl())
+                .defaultHeader("User-Agent", USER_AGENT)
+                .defaultHeader("Accept", "application/json")
+                .build();
+    }
+
+    @Bean
+    @Qualifier("yahooQuoteSummaryRestClient")
+    public RestClient yahooQuoteSummaryRestClient(YahooChartProperties yahoo) {
+        return RestClient.builder()
+                .baseUrl(yahoo.quoteSummaryBaseUrl())
                 .defaultHeader("User-Agent", USER_AGENT)
                 .defaultHeader("Accept", "application/json")
                 .build();
@@ -44,10 +64,10 @@ public class AppConfiguration {
 
     @Bean
     public YahooFinanceMarketDataProvider yahooMarketDataProvider(
-            RestClient yahooRestClient,
+            @Qualifier("yahooChartRestClient") RestClient yahooChartRestClient,
             UniverseProvider universeProvider,
             ObjectMapper objectMapper) {
-        return new YahooFinanceMarketDataProvider(yahooRestClient, universeProvider, objectMapper);
+        return new YahooFinanceMarketDataProvider(yahooChartRestClient, universeProvider, objectMapper);
     }
 
     @Bean

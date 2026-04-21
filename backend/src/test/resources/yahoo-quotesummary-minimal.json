@@ -1,0 +1,38 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "assetProfile": {
+          "sector": "Technology",
+          "industry": "Information Technology Services",
+          "country": "India",
+          "website": "https://www.example.com",
+          "fullTimeEmployees": { "raw": 614000, "fmt": "614K" },
+          "longBusinessSummary": "Sample company for unit test."
+        },
+        "financialData": {
+          "returnOnEquity": { "raw": 0.45 },
+          "totalRevenue": { "raw": 2500000000000 },
+          "grossMargins": { "raw": 0.25 }
+        },
+        "defaultKeyStatistics": {
+          "trailingPE": { "raw": 28.5 },
+          "forwardPE": { "raw": 26.0 },
+          "marketCap": { "raw": 1400000000000 },
+          "trailingEps": { "raw": 58.2 }
+        },
+        "summaryDetail": {
+          "trailingPE": { "raw": 28.5 }
+        },
+        "calendarEvents": {
+          "earnings": {
+            "earningsDate": [
+              { "raw": 1738195200, "fmt": "2025-01-30" }
+            ]
+          }
+        }
+      }
+    ],
+    "error": null
+  }
+}

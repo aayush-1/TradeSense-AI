@@ -1,12 +1,19 @@
 package ai.tradesense.web;
 
 import ai.tradesense.MarketDataConstants;
+import ai.tradesense.config.RecommendationStrategyProperties;
 import ai.tradesense.domain.Ohlc;
 import ai.tradesense.market.MarketDataProvider;
+import ai.tradesense.recommendation.RecommendationContext;
+import ai.tradesense.recommendation.RecommendationStrategy;
+import ai.tradesense.recommendation.StrategyEvaluation;
+import ai.tradesense.recommendation.WeightedRecommendationAggregator;
 import ai.tradesense.storage.OhlcFileStore;
 import ai.tradesense.storage.OhlcSeriesMerge;
 import ai.tradesense.universe.UniverseProvider;
+import ai.tradesense.web.dto.OverallRecommendation;
 import ai.tradesense.web.dto.RecommendationResponse;
+import ai.tradesense.web.dto.StrategyRecommendation;
 import ai.tradesense.web.dto.SymbolRecommendation;
 import org.springframework.stereotype.Service;
 
@@ -15,26 +22,37 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/** Builds recommendation responses by hydrating OHLC and running all {@link RecommendationStrategy} beans. */
 @Service
 public class RecommendationService {
 
     private final UniverseProvider universeProvider;
     private final MarketDataProvider marketDataProvider;
     private final OhlcFileStore ohlcFileStore;
+    private final List<RecommendationStrategy> strategies;
+    private final WeightedRecommendationAggregator aggregator;
+    private final RecommendationStrategyProperties recommendationStrategyProperties;
 
     public RecommendationService(
             UniverseProvider universeProvider,
             MarketDataProvider marketDataProvider,
-            OhlcFileStore ohlcFileStore) {
+            OhlcFileStore ohlcFileStore,
+            List<RecommendationStrategy> strategies,
+            WeightedRecommendationAggregator aggregator,
+            RecommendationStrategyProperties recommendationStrategyProperties) {
         this.universeProvider = universeProvider;
         this.marketDataProvider = marketDataProvider;
         this.ohlcFileStore = ohlcFileStore;
+        this.strategies =
+                strategies.stream().sorted(Comparator.comparing(RecommendationStrategy::strategyId)).toList();
+        this.aggregator = aggregator;
+        this.recommendationStrategyProperties = recommendationStrategyProperties;
     }
 
     /**
      * Loads or incrementally refreshes OHLC for the fixed universe: keeps ~{@link MarketDataConstants#ANALYSIS_HISTORY_MONTHS}
-     * months on disk, merges new Yahoo bars (incoming wins on same date). OHLC is used only internally; the API returns buy/skip
-     * rows with optional trade levels once the strategy is implemented.
+     * months on disk, merges new Yahoo bars (incoming wins on same date). Runs every {@link RecommendationStrategy} and
+     * aggregates a weighted overall buy/skip; no raw OHLC in the response.
      */
     public RecommendationResponse buildResponse() {
         LocalDate toDate = LocalDate.now();
@@ -49,17 +67,7 @@ public class RecommendationService {
                 List<Ohlc> series = h.series();
                 Double referencePrice =
                         series.isEmpty() ? null : series.get(series.size() - 1).close();
-                recommendations.add(
-                        new SymbolRecommendation(
-                                symbol,
-                                false,
-                                referencePrice,
-                                null,
-                                null,
-                                null,
-                                List.of(
-                                        "Recommendation strategy not implemented yet.",
-                                        h.marketDataNote())));
+                recommendations.add(buildSymbolRecommendation(symbol, series, referencePrice, h.marketDataNote()));
             } catch (Exception e) {
                 fetchErrors.add(symbol + ": " + e.getMessage());
             }
@@ -68,6 +76,41 @@ public class RecommendationService {
         recommendations.sort(Comparator.comparing(SymbolRecommendation::symbol));
 
         return RecommendationResponse.of(universe, recommendations, fetchErrors);
+    }
+
+    private SymbolRecommendation buildSymbolRecommendation(
+            String symbol, List<Ohlc> series, Double referencePrice, String marketDataNote) {
+        RecommendationContext ctx = new RecommendationContext(symbol, series, referencePrice);
+        List<StrategyRecommendation> perStrategy = new ArrayList<>();
+        for (RecommendationStrategy st : strategies) {
+            double weight =
+                    recommendationStrategyProperties.resolveWeight(st.strategyId(), st.defaultWeight());
+            try {
+                StrategyEvaluation ev = st.evaluate(ctx);
+                perStrategy.add(
+                        new StrategyRecommendation(
+                                st.strategyId(),
+                                st.displayName(),
+                                ev.buy(),
+                                weight,
+                                ev.rationale()));
+            } catch (Exception e) {
+                perStrategy.add(
+                        new StrategyRecommendation(
+                                st.strategyId(),
+                                st.displayName(),
+                                false,
+                                weight,
+                                List.of("Strategy failed: " + e.getMessage())));
+            }
+        }
+        OverallRecommendation overall =
+                aggregator.aggregate(perStrategy, recommendationStrategyProperties.getAggregationBuyThreshold());
+        List<String> notes = new ArrayList<>();
+        if (marketDataNote != null && !marketDataNote.isBlank()) {
+            notes.add(marketDataNote);
+        }
+        return new SymbolRecommendation(symbol, referencePrice, overall, List.copyOf(perStrategy), List.copyOf(notes));
     }
 
     private HydrationSummary hydrateAndPersist(String symbol, LocalDate analysisStart, LocalDate toDate)

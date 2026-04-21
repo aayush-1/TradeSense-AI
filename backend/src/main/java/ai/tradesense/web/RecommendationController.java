@@ -17,8 +17,8 @@ public class RecommendationController {
 
     /**
      * UI entry point: hydrates OHLC for the fixed universe (on-disk window per {@link ai.tradesense.MarketDataConstants}),
-     * incrementally fetches missing trailing dates from Yahoo. Response is per-symbol {@code buy} plus optional stop/target/holding
-     * days when the strategy is wired; no raw OHLC.
+     * incrementally fetches missing trailing dates from Yahoo, runs all {@link ai.tradesense.recommendation.RecommendationStrategy}
+     * beans, and returns per-strategy signals plus a weighted overall; no raw OHLC.
      */
     @GetMapping("/recommendations")
     public RecommendationResponse recommendations() {

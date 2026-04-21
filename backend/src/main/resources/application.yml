@@ -6,6 +6,17 @@ spring:
 tradesense:
   yahoo:
     chart-base-url: https://query1.finance.yahoo.com/v8/finance/chart
+    quote-summary-base-url: https://query2.finance.yahoo.com/v10/finance/quoteSummary
+    # Comma-separated modules for quoteSummary (see FundamentalSnapshot javadoc)
+    quote-summary-modules: assetProfile,summaryProfile,summaryDetail,defaultKeyStatistics,financialData,calendarEvents
+  fundamentals:
+    # Skip Yahoo quoteSummary if snapshot on disk is newer than this many days (GET /recommendations uses same TTL).
+    max-age-days: 90
+  recommendations:
+    # Weighted fraction of (buy votes × weight) must reach this threshold for overall buy (see WeightedRecommendationAggregator).
+    aggregation-buy-threshold: 0.5
+    strategy-weights:
+      placeholder-v1: 1.0
   cors:
     allowed-origins:
       - http://localhost:3000
@@ -21,6 +32,8 @@ tradesense:
   storage:
     # Relative to JVM user.dir (cwd). Example: mvn from backend/ → backend/data/ohlc/*.json ; from repo root → data/ohlc/
     ohlc-directory: data/ohlc
+    # Yahoo quoteSummary (or other) fundamental snapshots per symbol
+    fundamentals-directory: data/fundamentals
   market:
     # Yahoo-only: set false and configure Breeze when ICICI is working again.
     yahoo-only: true
