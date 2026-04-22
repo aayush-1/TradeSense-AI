@@ -30,6 +30,18 @@ public class RecommendationService {
     /** NSE session dates on OHLC bars use this zone (see {@link ai.tradesense.market.yahoo.YahooChartJsonParser}). */
     private static final ZoneId NSE_CALENDAR = ZoneId.of("Asia/Kolkata");
 
+    /**
+     * Minimum trailing calendar span (inclusive of {@code fetchTo}) when calling Yahoo. Narrow windows (especially
+     * same-day) are unreliable; widening to a week and merging is cheap and stable.
+     */
+    private static final int MIN_TRAILING_FETCH_CALENDAR_DAYS = 6;
+
+    /**
+     * If live Yahoo fails, we still emit recommendations when the last persisted session is no older than this many
+     * calendar days before {@code toDate} (covers weekends/holidays; NSE “today” vs last bar on Fri is still ok).
+     */
+    private static final int STALE_OK_LAST_BAR_MAX_AGE_DAYS = 5;
+
     private final UniverseProvider universeProvider;
     private final MarketDataProvider marketDataProvider;
     private final OhlcFileStore ohlcFileStore;
@@ -151,18 +163,72 @@ public class RecommendationService {
         }
 
         boolean providerInvoked = !fetchFrom.isAfter(fetchTo);
-        List<Ohlc> fetched = List.of();
         if (providerInvoked) {
-            fetched = marketDataProvider.getHistoricalData(symbol, fetchFrom, fetchTo);
+            LocalDate tailWeekStart = fetchTo.minusDays(MIN_TRAILING_FETCH_CALENDAR_DAYS);
+            if (tailWeekStart.isBefore(fetchFrom)) {
+                fetchFrom = tailWeekStart;
+            }
+            if (fetchFrom.isBefore(analysisStart)) {
+                fetchFrom = analysisStart;
+            }
+            if (fetchFrom.isAfter(fetchTo)) {
+                fetchFrom = fetchTo;
+            }
+        }
+        List<Ohlc> fetched = List.of();
+        boolean liveFetchFailed = false;
+        Exception liveFetchFailure = null;
+        if (providerInvoked) {
+            try {
+                fetched = fetchHistoricalWithSameDayFallback(symbol, fetchFrom, fetchTo, toDate);
+            } catch (Exception ex) {
+                liveFetchFailed = true;
+                liveFetchFailure = ex;
+                fetched = List.of();
+            }
         }
 
         List<Ohlc> merged = OhlcSeriesMerge.mergePreferIncoming(loaded, fetched);
         merged = OhlcSeriesMerge.trimNotBefore(merged, analysisStart);
-        ohlcFileStore.save(symbol, merged);
+        if (liveFetchFailed) {
+            if (!persistedOhlcRecentEnoughForRecommendations(merged, toDate)) {
+                LocalDate oldestOk = toDate.minusDays(STALE_OK_LAST_BAR_MAX_AGE_DAYS);
+                String lastPart =
+                        merged.isEmpty() ? "none" : merged.get(merged.size() - 1).date().toString();
+                throw new IllegalStateException(
+                        "Live market fetch failed and persisted OHLC is missing or too stale (latest "
+                                + lastPart
+                                + "; need last session on or after "
+                                + oldestOk
+                                + ").",
+                        liveFetchFailure);
+            }
+            ohlcFileStore.save(symbol, merged);
+            LocalDate last = merged.get(merged.size() - 1).date();
+            String note =
+                    "Live market data refresh failed; recommendations use persisted daily OHLC (latest session "
+                            + last
+                            + "). Recent sessions may be stale or missing.";
+            return new HydrationSummary(merged, note);
+        }
 
+        ohlcFileStore.save(symbol, merged);
         String marketDataNote =
                 describeHydration(lastOnDisk, fetchFrom, fetchTo, toDate, providerInvoked, fetched);
         return new HydrationSummary(merged, marketDataNote);
+    }
+
+    /**
+     * True when we still have a usable trimmed series after a failed Yahoo call: non-empty and the last bar is not
+     * older than {@link #STALE_OK_LAST_BAR_MAX_AGE_DAYS} calendar days before {@code toDate}.
+     */
+    private static boolean persistedOhlcRecentEnoughForRecommendations(List<Ohlc> mergedTrimmed, LocalDate toDate) {
+        if (mergedTrimmed.isEmpty()) {
+            return false;
+        }
+        LocalDate last = mergedTrimmed.get(mergedTrimmed.size() - 1).date();
+        LocalDate oldestOk = toDate.minusDays(STALE_OK_LAST_BAR_MAX_AGE_DAYS);
+        return !last.isBefore(oldestOk);
     }
 
     private static String describeHydration(
@@ -210,4 +276,35 @@ public class RecommendationService {
     }
 
     private record HydrationSummary(List<Ohlc> series, String marketDataNote) {}
+
+    /**
+     * Yahoo’s chart API often rejects or returns nothing for a single-day window ending on “today” (especially
+     * before/around the cash session). If the intended request is exactly one calendar day equal to {@code nseToday},
+     * fall back to yesterday only, then to a two-day strip ending yesterday, and merge those bars instead.
+     */
+    private List<Ohlc> fetchHistoricalWithSameDayFallback(
+            String symbol, LocalDate fetchFrom, LocalDate fetchTo, LocalDate nseToday) throws Exception {
+        boolean narrowTodayOnly = fetchFrom.equals(fetchTo) && fetchTo.equals(nseToday);
+        try {
+            List<Ohlc> first = marketDataProvider.getHistoricalData(symbol, fetchFrom, fetchTo);
+            if (!narrowTodayOnly || !first.isEmpty()) {
+                return first;
+            }
+        } catch (Exception firstEx) {
+            if (!narrowTodayOnly) {
+                throw firstEx;
+            }
+        }
+        LocalDate yesterday = nseToday.minusDays(1);
+        try {
+            List<Ohlc> second = marketDataProvider.getHistoricalData(symbol, yesterday, yesterday);
+            if (!second.isEmpty()) {
+                return second;
+            }
+        } catch (Exception ignored) {
+            // try wider window
+        }
+        LocalDate twoDaysAgo = nseToday.minusDays(2);
+        return marketDataProvider.getHistoricalData(symbol, twoDaysAgo, yesterday);
+    }
 }

@@ -2,6 +2,29 @@
 
 ## Swing Trading Analysis & Recommendation Engine
 
+### Run locally
+
+1. **Prerequisites:** [Java 17](https://adoptium.net/), [Maven](https://maven.apache.org/), and [Node.js](https://nodejs.org/) (current LTS is fine) with npm.
+
+2. **Start the backend** (Spring Boot on port **8080** from the repo root):
+
+   ```bash
+   cd backend
+   mvn spring-boot:run
+   ```
+
+   Wait until the app finishes starting; the API serves under `http://localhost:8080` (for example `GET /api/v1/recommendations`).
+
+3. **Start the frontend** (Vite dev server in a second terminal):
+
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+4. **Open the UI** at **http://localhost:5173**. The dev server proxies `/api` to `http://localhost:8080`, so keep the backend running while you use the app.
+
 ### Overview
 
 **TradeSense- AI** is a data-driven swing trading decision-support system that analyzes stock market data to generate:
