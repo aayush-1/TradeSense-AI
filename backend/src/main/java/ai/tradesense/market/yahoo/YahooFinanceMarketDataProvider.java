@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -16,6 +17,8 @@ import java.util.List;
  * OHLC from Yahoo Finance chart API. NSE symbols in the universe are requested as {@code SYMBOL.NS}.
  */
 public final class YahooFinanceMarketDataProvider implements MarketDataProvider {
+
+    private static final ZoneId NSE_CALENDAR = ZoneId.of("Asia/Kolkata");
 
     private final RestClient restClient;
     private final UniverseProvider universeProvider;
@@ -34,7 +37,8 @@ public final class YahooFinanceMarketDataProvider implements MarketDataProvider 
     public List<Ohlc> getHistoricalData(String symbol, LocalDate from, LocalDate to) {
         String sym = normalizeSymbol(symbol);
         String yahooTicker = toYahooTicker(sym);
-        long period1 = from.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+        LocalDate chartFrom = chartPeriodStartInclusive(from, to);
+        long period1 = chartFrom.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
         long period2 = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toEpochSecond() - 1;
         if (period1 > period2) {
             throw new IllegalArgumentException("from must be <= to");
@@ -50,7 +54,8 @@ public final class YahooFinanceMarketDataProvider implements MarketDataProvider 
 
     @Override
     public Ohlc getLatestData(String symbol) {
-        List<Ohlc> recent = getHistoricalData(symbol, LocalDate.now().minusDays(14), LocalDate.now());
+        LocalDate today = LocalDate.now(NSE_CALENDAR);
+        List<Ohlc> recent = getHistoricalData(symbol, today.minusDays(14), today);
         if (recent.isEmpty()) {
             throw new IllegalStateException("No recent bars for " + normalizeSymbol(symbol));
         }
@@ -88,6 +93,20 @@ public final class YahooFinanceMarketDataProvider implements MarketDataProvider 
             return s;
         }
         return s + ".NS";
+    }
+
+    /**
+     * Inclusive start date for Yahoo {@code period1} (UTC midnight). When {@code from} equals {@code to}, asks from
+     * one day earlier so the chart window is not a single UTC day (Yahoo has returned HTTP 400 for some tickers).
+     */
+    static LocalDate chartPeriodStartInclusive(LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException("from must be <= to");
+        }
+        if (from.equals(to) && from.isAfter(LocalDate.MIN)) {
+            return from.minusDays(1);
+        }
+        return from;
     }
 
     public static String normalizeSymbol(String symbol) {

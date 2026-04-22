@@ -1,8 +1,34 @@
 # Fixed NSE EQ-style symbols for MVP scoring (one per line).
 # Replace or extend this list before moving to a dynamic UniverseProvider.
+# Yahoo chart uses SYMBOL.NS; use a hyphen when NSE/Yahoo does (e.g. BAJAJ-AUTO).
 
 RELIANCE
 TCS
 HDFCBANK
 INFY
 ICICIBANK
+GABRIEL
+GODREJIND
+PCBL
+KAYNES
+MEDANTA
+SUZLON
+BLUEDART
+TMPV
+TMCV
+MEDIASSIST
+BAJAJ-AUTO
+BEL
+MTARTECH
+GREENPOWER
+PIDILITIND
+POLYCAB
+GODREJPROP
+BHARTIARTL
+RTNINDIA
+GILLETTE
+GATECH
+PNCINFRA
+ADANIGREEN
+ADANIENSOL
+

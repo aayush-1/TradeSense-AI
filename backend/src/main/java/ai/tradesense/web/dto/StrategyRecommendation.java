@@ -8,6 +8,8 @@ public record StrategyRecommendation(
         String displayName,
         boolean buy,
         double weight,
-        List<String> rationale
+        List<String> rationale,
+        /** When false, this row is omitted from overall weighted buy (e.g. insufficient bars, strategy error). */
+        boolean includedInAggregation
 ) {
 }

@@ -16,7 +16,11 @@ tradesense:
     # Weighted fraction of (buy votes × weight) must reach this threshold for overall buy (see WeightedRecommendationAggregator).
     aggregation-buy-threshold: 0.5
     strategy-weights:
-      placeholder-v1: 1.0
+      breakout-volume-v1: 1.2
+      trend-ma-cross-v1: 1.5
+      mean-revert-vwap-proxy-v1: 0.9
+      rsi-volume-v1: 1.0
+      accumulation-pressure-v1: 1.1
   cors:
     allowed-origins:
       - http://localhost:3000

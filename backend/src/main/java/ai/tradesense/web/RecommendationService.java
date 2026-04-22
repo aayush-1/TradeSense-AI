@@ -18,6 +18,7 @@ import ai.tradesense.web.dto.SymbolRecommendation;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -25,6 +26,9 @@ import java.util.List;
 /** Builds recommendation responses by hydrating OHLC and running all {@link RecommendationStrategy} beans. */
 @Service
 public class RecommendationService {
+
+    /** NSE session dates on OHLC bars use this zone (see {@link ai.tradesense.market.yahoo.YahooChartJsonParser}). */
+    private static final ZoneId NSE_CALENDAR = ZoneId.of("Asia/Kolkata");
 
     private final UniverseProvider universeProvider;
     private final MarketDataProvider marketDataProvider;
@@ -55,7 +59,7 @@ public class RecommendationService {
      * aggregates a weighted overall buy/skip; no raw OHLC in the response.
      */
     public RecommendationResponse buildResponse() {
-        LocalDate toDate = LocalDate.now();
+        LocalDate toDate = LocalDate.now(NSE_CALENDAR);
         LocalDate analysisStart = toDate.minusMonths(MarketDataConstants.ANALYSIS_HISTORY_MONTHS);
         List<String> universe = universeProvider.getSymbols();
         List<SymbolRecommendation> recommendations = new ArrayList<>();
@@ -93,7 +97,8 @@ public class RecommendationService {
                                 st.displayName(),
                                 ev.buy(),
                                 weight,
-                                ev.rationale()));
+                                ev.rationale(),
+                                ev.includedInAggregation()));
             } catch (Exception e) {
                 perStrategy.add(
                         new StrategyRecommendation(
@@ -101,7 +106,8 @@ public class RecommendationService {
                                 st.displayName(),
                                 false,
                                 weight,
-                                List.of("Strategy failed: " + e.getMessage())));
+                                List.of("Strategy failed: " + e.getMessage()),
+                                false));
             }
         }
         OverallRecommendation overall =
