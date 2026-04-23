@@ -14,12 +14,25 @@ export type StrategyRecommendation = {
   includedInAggregation: boolean
 }
 
+export type TradeLevelsSuggestion = {
+  methodId: string
+  methodLabel: string
+  methodDescription: string
+  entryPrice: number
+  stopLoss: number
+  takeProfit: number
+  riskPerShare: number
+  rewardPerShare: number
+  detailLines: string[]
+}
+
 export type SymbolRecommendation = {
   symbol: string
   referencePrice: number | null
   overall: OverallRecommendation
   strategies: StrategyRecommendation[]
   notes: string[]
+  tradeLevels: TradeLevelsSuggestion[]
 }
 
 export type RecommendationResponse = {

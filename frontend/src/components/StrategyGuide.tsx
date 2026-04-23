@@ -28,7 +28,7 @@ const STRATEGIES: {
     title: 'RSI + volume stress',
     weightNote: 'Default weight 1.0.',
     body: [
-      'Combines a 14-period RSI with volume and a short swing-low check. A buy requires RSI below 32 (oversold), volume above 1.2× the prior 20-day average volume, and the close not below the minimum low of the prior 5 sessions (avoids “catching a knife” in a free fall).',
+      'Combines a 14-period RSI with volume, a short swing-low check, and a 200-day SMA trend filter. A buy requires RSI below 35 (stressed / oversold), volume above 1.2× the prior 20-day average volume, the close not below the minimum low of the prior 5 sessions (avoids “catching a knife” in a free fall), and the close above the 200-day simple moving average (long-term uptrend only).',
       'Useful for identifying stressed but potentially stabilising setups when liquidity shows up.',
     ],
   },

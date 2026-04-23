@@ -42,7 +42,7 @@ public class OhlcFileStore {
         Path tmp = Path.of(file.toString() + ".tmp");
         byte[] data = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(bars);
         Files.write(tmp, data);
-        Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        AtomicReplacingMove.move(tmp, file);
     }
 
     private Path fileFor(String symbol) {

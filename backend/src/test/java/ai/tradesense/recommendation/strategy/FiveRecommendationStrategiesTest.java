@@ -85,35 +85,80 @@ class FiveRecommendationStrategiesTest {
     }
 
     @Test
-    void rsiVolume_passesOnOversoldVolumeAndCloseAboveSwingLow() {
+    void rsiVolume_insufficientBars() {
         List<Ohlc> bars = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 199; i++) {
             bars.add(bar(d0().plusDays(i), 100, 100, 100, 100, 1000));
         }
-        for (int i = 7; i < 21; i++) {
-            double c = 100 - (i - 7) * 4.0;
-            bars.add(bar(d0().plusDays(i), c, c, c - 0.5, c, 1000));
+        var s = new RsiVolumeRecommendationStrategy();
+        StrategyEvaluation e = s.evaluate(new RecommendationContext("X", bars, null));
+        assertFalse(e.includedInAggregation());
+        assertTrue(e.rationale().get(0).contains("200"));
+    }
+
+    /**
+     * 199 bars of context + last bar tuned by {@code lastClose}: long uptrend, sharp drop, then candidate bounce close
+     * with heavy volume.
+     */
+    /**
+     * Flat high plateau (lifts SMA200 slowly), steep drop + base (pulls RSI down), then one bounce bar with volume.
+     */
+    /**
+     * RSI is unchanged if you add the same constant to every close; adding a high plateau first pulls SMA200 up so
+     * the last close (from the classic oversold spike pattern) still clears the 200-day average.
+     */
+    private static List<Ohlc> rsiVolumeBuySeries() {
+        final double lift = 500.0;
+        List<Ohlc> bars = new ArrayList<>();
+        int day = 0;
+        for (int i = 0; i < 178; i++) {
+            double c = 500.0;
+            bars.add(bar(d0().plusDays(day++), c, c, c, c, 1000));
         }
-        bars.add(bar(d0().plusDays(21), 30, 35, 28, 50, 5000));
+        for (int i = 0; i < 7; i++) {
+            double c = 100.0 + lift;
+            bars.add(bar(d0().plusDays(day++), c, c, c, c, 1000));
+        }
+        for (int i = 7; i < 21; i++) {
+            double c = 100.0 - (i - 7) * 5.0 + lift;
+            bars.add(bar(d0().plusDays(day++), c, c, c - 0.5, c, 1000));
+        }
+        bars.add(bar(d0().plusDays(day), 30.0 + lift, 36.0 + lift, 22.0 + lift, 35.0 + lift, 5000));
+        return bars;
+    }
+
+    @Test
+    void rsiVolume_passesOnOversoldVolumeAndCloseAboveSwingLow() {
+        List<Ohlc> bars = rsiVolumeBuySeries();
         var s = new RsiVolumeRecommendationStrategy();
         StrategyEvaluation e = s.evaluate(new RecommendationContext("X", bars, null));
         assertTrue(e.buy(), () -> String.join("; ", e.rationale()));
+        assertTrue(e.rationale().stream().anyMatch((line) -> line.contains("SMA200")));
     }
 
     @Test
     void rsiVolume_failsWhenCloseBelowPriorSwingLow() {
-        List<Ohlc> bars = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            bars.add(bar(d0().plusDays(i), 100, 100, 100, 100, 1000));
-        }
-        for (int i = 7; i < 21; i++) {
-            double c = 100 - (i - 7) * 4.0;
-            bars.add(bar(d0().plusDays(i), c, c, c - 0.5, c, 1000));
-        }
-        bars.add(bar(d0().plusDays(21), 30, 35, 10, 15, 5000));
+        List<Ohlc> bars = new ArrayList<>(rsiVolumeBuySeries());
+        Ohlc last = bars.get(bars.size() - 1);
+        bars.set(
+                bars.size() - 1,
+                bar(last.date(), last.close(), last.close() + 6, 10, 15, 20_000));
         var s = new RsiVolumeRecommendationStrategy();
         StrategyEvaluation e = s.evaluate(new RecommendationContext("X", bars, null));
         assertFalse(e.buy());
+    }
+
+    @Test
+    void rsiVolume_failsWhenBelowSma200EvenIfOversold() {
+        List<Ohlc> bars = new ArrayList<>(rsiVolumeBuySeries());
+        Ohlc last = bars.get(bars.size() - 1);
+        bars.set(
+                bars.size() - 1,
+                bar(last.date(), 35, 40, 30, 35, 20_000));
+        var s = new RsiVolumeRecommendationStrategy();
+        StrategyEvaluation e = s.evaluate(new RecommendationContext("X", bars, null));
+        assertFalse(e.buy());
+        assertTrue(e.rationale().stream().anyMatch((line) -> line.contains("above long MA false")));
     }
 
     @Test

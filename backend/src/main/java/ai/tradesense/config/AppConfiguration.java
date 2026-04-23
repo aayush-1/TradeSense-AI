@@ -22,6 +22,7 @@ import java.time.Clock;
         YahooChartProperties.class,
         FundamentalsProperties.class,
         RecommendationStrategyProperties.class,
+        AtrVolatilityGateProperties.class,
         CorsProperties.class,
         BreezeProperties.class,
         MarketRoutingProperties.class,

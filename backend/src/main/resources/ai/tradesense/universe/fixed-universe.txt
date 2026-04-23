@@ -1,34 +1,220 @@
-# Fixed NSE EQ-style symbols for MVP scoring (one per line).
-# Replace or extend this list before moving to a dynamic UniverseProvider.
-# Yahoo chart uses SYMBOL.NS; use a hyphen when NSE/Yahoo does (e.g. BAJAJ-AUTO).
+# NSE EQ-style symbols (Yahoo: SYMBOL.NS). Hyphen only when NSE uses it (e.g. BAJAJ-AUTO, LTIM).
+# Ampersand symbols must match NSE exactly (e.g. M&M, ARE&M).
+# One symbol per line; # and blank lines ignored.
 
-RELIANCE
-TCS
+# --- Banking & financials ---
+AXISBANK
+BAJAJFINSV
+BAJFINANCE
+BANKBARODA
+CHOLAFIN
+FEDERALBNK
 HDFCBANK
-INFY
+HDFCLIFE
 ICICIBANK
-GABRIEL
-GODREJIND
-PCBL
-KAYNES
-MEDANTA
-SUZLON
-BLUEDART
-TMPV
-TMCV
-MEDIASSIST
-BAJAJ-AUTO
+ICICIPRULI
+IDFCFIRSTB
+INDUSINDBK
+KOTAKBANK
+LICHSGFIN
+MUTHOOTFIN
+SBILIFE
+SBIN
+SHRIRAMFIN
+
+# --- Power, infra & capital goods ---
+ABB
+ADANIPOWER
 BEL
-MTARTECH
-GREENPOWER
-PIDILITIND
-POLYCAB
-GODREJPROP
-BHARTIARTL
-RTNINDIA
-GILLETTE
-GATECH
-PNCINFRA
+BHEL
+CGPOWER
+CUMMINSIND
+ENGINERSIN
+IRFC
+LT
+LTTS
+NHPC
+NTPC
+POWERGRID
+RVNL
+SIEMENS
+SJVN
+TATAPOWER
+THERMAX
+
+# --- Oil, gas & energy ---
 ADANIGREEN
 ADANIENSOL
+BPCL
+GAIL
+HINDPETRO
+IOC
+OIL
+ONGC
+PETRONET
+RELIANCE
 
+# --- Auto & EV ---
+ARE&M
+ASHOKLEY
+BAJAJ-AUTO
+EICHERMOT
+EXIDEIND
+M&M
+MARUTI
+OLECTRA
+TVSMOTOR
+
+# --- IT & tech ---
+COFORGE
+HCLTECH
+INFY
+LTIM
+MPHASIS
+PERSISTENT
+TCS
+TECHM
+WIPRO
+
+# --- Metals & commodities ---
+HINDALCO
+HINDCOPPER
+JINDALSTEL
+JSWSTEEL
+NATIONALUM
+SAIL
+TATASTEEL
+VEDL
+
+# --- Pharma & healthcare ---
+APOLLOHOSP
+AUROPHARMA
+BIOCON
+CIPLA
+DIVISLAB
+DRREDDY
+FORTIS
+LUPIN
+SUNPHARMA
+
+# --- FMCG & consumption ---
+BRITANNIA
+COLPAL
+DABUR
+GODREJCP
+HINDUNILVR
+ITC
+MARICO
+NESTLEIND
+TATACONSUM
+
+# --- Cement & building materials ---
+ACC
+AMBUJACEM
+DALBHARAT
+RAMCOCEM
+SHREECEM
+ULTRACEMCO
+
+# --- Telecom & digital ---
+BHARTIARTL
+IDEA
+JIOFIN
+NAZARA
+PAYTM
+
+# --- Midcap momentum & quality ---
+AARTIIND
+ASTRAL
+DEEPAKNTR
+DIXON
+ETERNAL
+IRCTC
+KPITTECH
+PIIND
+POLYCAB
+SRF
+TRENT
+
+# --- Textiles ---
+KPRMILL
+PAGEIND
+VTL
+
+# --- Chemicals ---
+BALAMINES
+NAVINFLUOR
+
+# --- Real estate ---
+BRIGADE
+DLF
+GODREJPROP
+OBEROIRLTY
+PRESTIGE
+
+# --- New age / high volatility ---
+DELHIVERY
+NYKAA
+POLICYBZR
+
+# --- PSU, rail & defense ---
+COCHINSHIP
+HAL
+IRCON
+MAZDOCK
+
+# --- High beta / trader favourites ---
+HFCL
+IEX
+JPPOWER
+RAIN
+TRIDENT
+
+# --- Green energy & transition (add-ons; ADANIGREEN/SUZLON/CGPOWER etc. above) ---
+BORORENEW
+INOXWIND
+JSWENERGY
+KPIGREEN
+WAAREEENER
+
+# --- Power infra & grid (PFC/REC/KEC; SIEMENS/POWERGRID/NTPC etc. above) ---
+KALPATPOWR
+KEC
+PFC
+RECLTD
+
+# --- AI / digital enablers (IT majors above; KPITTECH/PERSISTENT above) ---
+HAPPSTMNDS
+TANLA
+TATAELXSI
+
+# --- EMS / semis ecosystem (DIXON/KAYNES above) ---
+MOSCHIP
+SYRMA
+
+# --- Defense add-on (HAL/BEL/MAZDOCK/COCHINSHIP above) ---
+BDL
+
+# --- Manufacturing / industrials (POLYCAB/ASTRAL above) ---
+APLAPOLLO
+KEI
+SUPREMEIND
+
+# --- Additional swing names (prior universe + liquidity) ---
+BLUEDART
+GABRIEL
+GATECH
+GILLETTE
+GODREJIND
+GREENPOWER
+KAYNES
+MEDIASSIST
+MEDANTA
+MTARTECH
+PCBL
+PIDILITIND
+PNCINFRA
+RTNINDIA
+SUZLON
+TMPV
+TMCV

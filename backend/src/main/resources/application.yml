@@ -21,6 +21,13 @@ tradesense:
       mean-revert-vwap-proxy-v1: 0.9
       rsi-volume-v1: 1.0
       accumulation-pressure-v1: 1.1
+      pullback-uptrend-v1: 1.25
+    # ATR% = ATR(14)/last close. Adds symbol "notes" only; does not change buy votes (see AtrVolatilityNotes).
+    atr-gate:
+      enabled: true
+      atr-period: 14
+      note-high-atr-pct: 0.07
+      note-low-atr-pct: 0.004
   cors:
     allowed-origins:
       - http://localhost:3000

@@ -1,13 +1,17 @@
 package ai.tradesense.web;
 
 import ai.tradesense.MarketDataConstants;
+import ai.tradesense.config.AtrVolatilityGateProperties;
 import ai.tradesense.config.RecommendationStrategyProperties;
 import ai.tradesense.domain.Ohlc;
 import ai.tradesense.market.MarketDataProvider;
+import ai.tradesense.recommendation.AtrVolatilityNotes;
 import ai.tradesense.recommendation.RecommendationContext;
 import ai.tradesense.recommendation.RecommendationStrategy;
 import ai.tradesense.recommendation.StrategyEvaluation;
 import ai.tradesense.recommendation.WeightedRecommendationAggregator;
+import ai.tradesense.recommendation.levels.TradeLevelsCalculator;
+import ai.tradesense.recommendation.levels.TradeLevelsInput;
 import ai.tradesense.storage.OhlcFileStore;
 import ai.tradesense.storage.OhlcSeriesMerge;
 import ai.tradesense.universe.UniverseProvider;
@@ -15,6 +19,7 @@ import ai.tradesense.web.dto.OverallRecommendation;
 import ai.tradesense.web.dto.RecommendationResponse;
 import ai.tradesense.web.dto.StrategyRecommendation;
 import ai.tradesense.web.dto.SymbolRecommendation;
+import ai.tradesense.web.dto.TradeLevelsSuggestion;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -48,6 +53,8 @@ public class RecommendationService {
     private final List<RecommendationStrategy> strategies;
     private final WeightedRecommendationAggregator aggregator;
     private final RecommendationStrategyProperties recommendationStrategyProperties;
+    private final AtrVolatilityGateProperties atrVolatilityGateProperties;
+    private final List<TradeLevelsCalculator> tradeLevelsCalculators;
 
     public RecommendationService(
             UniverseProvider universeProvider,
@@ -55,7 +62,9 @@ public class RecommendationService {
             OhlcFileStore ohlcFileStore,
             List<RecommendationStrategy> strategies,
             WeightedRecommendationAggregator aggregator,
-            RecommendationStrategyProperties recommendationStrategyProperties) {
+            RecommendationStrategyProperties recommendationStrategyProperties,
+            AtrVolatilityGateProperties atrVolatilityGateProperties,
+            List<TradeLevelsCalculator> tradeLevelsCalculators) {
         this.universeProvider = universeProvider;
         this.marketDataProvider = marketDataProvider;
         this.ohlcFileStore = ohlcFileStore;
@@ -63,6 +72,9 @@ public class RecommendationService {
                 strategies.stream().sorted(Comparator.comparing(RecommendationStrategy::strategyId)).toList();
         this.aggregator = aggregator;
         this.recommendationStrategyProperties = recommendationStrategyProperties;
+        this.atrVolatilityGateProperties = atrVolatilityGateProperties;
+        this.tradeLevelsCalculators =
+                tradeLevelsCalculators.stream().sorted(Comparator.comparing(TradeLevelsCalculator::methodId)).toList();
     }
 
     /**
@@ -128,7 +140,21 @@ public class RecommendationService {
         if (marketDataNote != null && !marketDataNote.isBlank()) {
             notes.add(marketDataNote);
         }
-        return new SymbolRecommendation(symbol, referencePrice, overall, List.copyOf(perStrategy), List.copyOf(notes));
+        AtrVolatilityNotes.maybeAppend(notes, series, atrVolatilityGateProperties);
+        List<TradeLevelsSuggestion> tradeLevels = List.of();
+        if (overall.buy()
+                && referencePrice != null
+                && referencePrice > 0
+                && !series.isEmpty()) {
+            TradeLevelsInput levelInput = new TradeLevelsInput(symbol, series, referencePrice);
+            List<TradeLevelsSuggestion> levels = new ArrayList<>();
+            for (TradeLevelsCalculator calc : tradeLevelsCalculators) {
+                calc.compute(levelInput).map(TradeLevelsSuggestion::fromSnapshot).ifPresent(levels::add);
+            }
+            tradeLevels = List.copyOf(levels);
+        }
+        return new SymbolRecommendation(
+                symbol, referencePrice, overall, List.copyOf(perStrategy), List.copyOf(notes), tradeLevels);
     }
 
     private HydrationSummary hydrateAndPersist(String symbol, LocalDate analysisStart, LocalDate toDate)

@@ -22,13 +22,13 @@ type Props = {
 }
 
 /** Time / price scale labels — large for readability on dense charts */
-const CHART_FONT_SIZE = 30
+const CHART_FONT_SIZE = 36
 const CHART_FONT_FAMILY = "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 function readChartHeight(el: HTMLElement, variant: 'default' | 'detail') {
   const h = el.clientHeight
   if (h > 0) return h
-  return variant === 'detail' ? 656 : 380
+  return variant === 'detail' ? 1312 : 380
 }
 
 export function PriceChart({ symbol, bars, variant = 'default' }: Props) {
@@ -111,7 +111,7 @@ export function PriceChart({ symbol, bars, variant = 'default' }: Props) {
 
   const heightClass =
     variant === 'detail'
-      ? 'h-[576px] sm:h-[616px] lg:h-[656px]'
+      ? 'h-[1152px] sm:h-[1232px] lg:h-[1312px]'
       : 'h-[min(420px,40vh)] min-h-[260px] sm:min-h-[280px]'
 
   const outerClass =
