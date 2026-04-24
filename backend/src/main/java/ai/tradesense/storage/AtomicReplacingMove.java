@@ -5,6 +5,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 
 /**
  * Writes via a temp file then replaces the destination. Tries an atomic rename first; falls back when the file system
@@ -14,6 +15,14 @@ import java.nio.file.StandardCopyOption;
 final class AtomicReplacingMove {
 
     private AtomicReplacingMove() {}
+
+    /** True when {@code file} exists and its bytes are identical to {@code data} (skip redundant atomic replace). */
+    static boolean contentMatches(Path file, byte[] data) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        return Arrays.equals(Files.readAllBytes(file), data);
+    }
 
     static void move(Path tmp, Path dest) throws IOException {
         try {

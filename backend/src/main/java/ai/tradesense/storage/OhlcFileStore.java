@@ -39,10 +39,18 @@ public class OhlcFileStore {
     public void save(String symbol, List<Ohlc> bars) throws IOException {
         Files.createDirectories(directory);
         Path file = fileFor(symbol);
-        Path tmp = Path.of(file.toString() + ".tmp");
         byte[] data = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(bars);
-        Files.write(tmp, data);
-        AtomicReplacingMove.move(tmp, file);
+        if (AtomicReplacingMove.contentMatches(file, data)) {
+            return;
+        }
+        Path tmp = Path.of(file.toString() + ".tmp");
+        try {
+            Files.write(tmp, data);
+            AtomicReplacingMove.move(tmp, file);
+        } catch (IOException e) {
+            Files.deleteIfExists(tmp);
+            throw new IOException("Could not save OHLC for " + symbol + " (" + file + ")", e);
+        }
     }
 
     private Path fileFor(String symbol) {

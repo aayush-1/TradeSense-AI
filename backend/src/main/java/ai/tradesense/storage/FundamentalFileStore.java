@@ -39,10 +39,18 @@ public class FundamentalFileStore {
     public void save(String symbol, FundamentalSnapshot snapshot) throws IOException {
         Files.createDirectories(directory);
         Path file = fileFor(symbol);
-        Path tmp = Path.of(file.toString() + ".tmp");
         byte[] data = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(snapshot);
-        Files.write(tmp, data);
-        AtomicReplacingMove.move(tmp, file);
+        if (AtomicReplacingMove.contentMatches(file, data)) {
+            return;
+        }
+        Path tmp = Path.of(file.toString() + ".tmp");
+        try {
+            Files.write(tmp, data);
+            AtomicReplacingMove.move(tmp, file);
+        } catch (IOException e) {
+            Files.deleteIfExists(tmp);
+            throw new IOException("Could not save fundamentals for " + symbol + " (" + file + ")", e);
+        }
     }
 
     private Path fileFor(String symbol) {
