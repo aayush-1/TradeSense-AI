@@ -59,6 +59,15 @@ public class AppConfiguration {
     }
 
     @Bean
+    @Qualifier("coinGeckoRestClient")
+    public RestClient coinGeckoRestClient() {
+        return RestClient.builder()
+                .baseUrl("https://api.coingecko.com/api/v3")
+                .defaultHeader("Accept", "application/json")
+                .build();
+    }
+
+    @Bean
     public UniverseProvider universeProvider() throws IOException {
         return FixedUniverseProvider.defaultUniverse();
     }

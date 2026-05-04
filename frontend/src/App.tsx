@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { fetchOhlcSeries, fetchRecommendations } from './api/client'
-import type { SymbolRecommendation } from './api/types'
+import type { MarketSegment, SymbolRecommendation } from './api/types'
 import { PriceChart } from './components/PriceChart'
 import { StrategyGuide } from './components/StrategyGuide'
 import { humanizeDataErrorMessage } from './lib/humanizeRecommendationError'
@@ -12,6 +12,17 @@ const inr = new Intl.NumberFormat('en-IN', {
   currency: 'INR',
   maximumFractionDigits: 2,
 })
+const usd = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 2,
+})
+
+const SEGMENTS: MarketSegment[] = ['indian', 'crypto']
+
+function formatPrice(segment: MarketSegment, value: number) {
+  return segment === 'crypto' ? usd.format(value) : inr.format(value)
+}
 
 function pct(x: number) {
   return `${(x * 100).toFixed(1)}%`
@@ -148,10 +159,10 @@ function StrategyCard({ row }: { row: SymbolRecommendation['strategies'][number]
   )
 }
 
-function DetailOhlc({ symbol }: { symbol: string }) {
+function DetailOhlc({ symbol, segment }: { symbol: string; segment: MarketSegment }) {
   const q = useQuery({
-    queryKey: ['ohlc', symbol],
-    queryFn: () => fetchOhlcSeries(symbol),
+    queryKey: ['ohlc', segment, symbol],
+    queryFn: () => fetchOhlcSeries(symbol, segment),
   })
   if (q.isLoading) {
     return (
@@ -177,7 +188,7 @@ function DetailOhlc({ symbol }: { symbol: string }) {
   return null
 }
 
-function TradeLevelsPanel({ row }: { row: SymbolRecommendation }) {
+function TradeLevelsPanel({ row, segment }: { row: SymbolRecommendation; segment: MarketSegment }) {
   const methods = row.tradeLevels ?? []
   if (!row.overall.buy || methods.length === 0) return null
   return (
@@ -196,20 +207,20 @@ function TradeLevelsPanel({ row }: { row: SymbolRecommendation }) {
             <dl className="grid gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-5 lg:grid-cols-4">
               <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/50 px-4 py-3">
                 <dt className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Entry (ref)</dt>
-                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-white">{inr.format(t.entryPrice)}</dd>
+                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-white">{formatPrice(segment, t.entryPrice)}</dd>
               </div>
               <div className="rounded-xl border border-rose-800/40 bg-rose-950/20 px-4 py-3">
                 <dt className="text-sm font-semibold uppercase tracking-wide text-rose-300/90">Stop loss</dt>
-                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-rose-100">{inr.format(t.stopLoss)}</dd>
+                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-rose-100">{formatPrice(segment, t.stopLoss)}</dd>
               </div>
               <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/25 px-4 py-3">
                 <dt className="text-sm font-semibold uppercase tracking-wide text-emerald-200/90">Target</dt>
-                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-emerald-100">{inr.format(t.takeProfit)}</dd>
+                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums text-emerald-100">{formatPrice(segment, t.takeProfit)}</dd>
               </div>
               <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/50 px-4 py-3">
                 <dt className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Risk / reward (share)</dt>
                 <dd className="mt-1 font-mono text-xl font-semibold tabular-nums text-zinc-200">
-                  {inr.format(t.riskPerShare)} → {inr.format(t.rewardPerShare)}
+                  {formatPrice(segment, t.riskPerShare)} → {formatPrice(segment, t.rewardPerShare)}
                 </dd>
               </div>
             </dl>
@@ -238,7 +249,7 @@ function TradeLevelsPanel({ row }: { row: SymbolRecommendation }) {
   )
 }
 
-function DetailPane({ row }: { row: SymbolRecommendation }) {
+function DetailPane({ row, segment }: { row: SymbolRecommendation; segment: MarketSegment }) {
   const { overall } = row
   const verdict = overallVerdictChip(row)
   return (
@@ -247,7 +258,7 @@ function DetailPane({ row }: { row: SymbolRecommendation }) {
         <div>
           <h2 className="font-mono text-5xl font-bold tracking-tight text-white lg:text-6xl">{row.symbol}</h2>
           <p className="mt-2 text-4xl font-bold tabular-nums text-zinc-100">
-            {row.referencePrice != null ? inr.format(row.referencePrice) : '—'}
+            {row.referencePrice != null ? formatPrice(segment, row.referencePrice) : '—'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -269,11 +280,11 @@ function DetailPane({ row }: { row: SymbolRecommendation }) {
         </div>
       </div>
 
-      <TradeLevelsPanel row={row} />
+      <TradeLevelsPanel row={row} segment={segment} />
 
       <div className="shrink-0">
         <h3 className="mb-3 text-xl font-bold uppercase tracking-wide text-zinc-200">Price chart</h3>
-        <DetailOhlc symbol={row.symbol} />
+        <DetailOhlc symbol={row.symbol} segment={segment} />
       </div>
 
       <div>
@@ -305,32 +316,59 @@ function scrollListToSymbol(
 }
 
 export default function App() {
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
-  const [symbolListFilter, setSymbolListFilter] = useState('')
+  const queryClient = useQueryClient()
+  const [activeSegment, setActiveSegment] = useState<MarketSegment>('indian')
+  const [selectedBySegment, setSelectedBySegment] = useState<Record<MarketSegment, string | null>>({
+    indian: null,
+    crypto: null,
+  })
+  const [filterBySegment, setFilterBySegment] = useState<Record<MarketSegment, string>>({
+    indian: '',
+    crypto: '',
+  })
   const symbolListNavRef = useRef<HTMLElement | null>(null)
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const [updatedAtBySegment, setUpdatedAtBySegment] = useState<Record<MarketSegment, Date | null>>({
+    indian: null,
+    crypto: null,
+  })
   /** When set, global data warnings are hidden until the server returns a different `dataErrors` list. */
-  const [dismissedDataErrorsKey, setDismissedDataErrorsKey] = useState<string | null>(null)
+  const [dismissedDataErrorsKeyBySegment, setDismissedDataErrorsKeyBySegment] = useState<
+    Record<MarketSegment, string | null>
+  >({ indian: null, crypto: null })
   /**
    * After "Refresh", only errors not present in this snapshot are shown (same persistent failures are not repeated).
    * `null` = initial load / never refreshed — show all errors from the latest response.
    */
-  const [manualRefreshErrorSnapshot, setManualRefreshErrorSnapshot] = useState<string[] | null>(null)
+  const [manualRefreshErrorSnapshotBySegment, setManualRefreshErrorSnapshotBySegment] = useState<
+    Record<MarketSegment, string[] | null>
+  >({ indian: null, crypto: null })
   const [rightPaneView, setRightPaneView] = useState<'symbol' | 'guide'>('symbol')
 
   const rec = useQuery({
-    queryKey: ['recommendations'],
+    queryKey: ['recommendations', activeSegment],
     queryFn: async () => {
-      const data = await fetchRecommendations()
-      setUpdatedAt(new Date())
+      const data = await fetchRecommendations(activeSegment)
+      setUpdatedAtBySegment((prev) => ({ ...prev, [activeSegment]: new Date() }))
       return data
     },
   })
+
+  useEffect(() => {
+    const preloadSegment = SEGMENTS.find((seg) => seg !== activeSegment)
+    if (!preloadSegment) return
+    void queryClient.prefetchQuery({
+      queryKey: ['recommendations', preloadSegment],
+      queryFn: () => fetchRecommendations(preloadSegment),
+    })
+  }, [activeSegment, queryClient])
 
   const sortedRows = useMemo(() => {
     const list = rec.data?.recommendations ?? []
     return sortRecommendations(list)
   }, [rec.data])
+
+  const symbolListFilter = filterBySegment[activeSegment]
+  const selectedSymbol = selectedBySegment[activeSegment]
 
   const filteredRows = useMemo(() => {
     const q = symbolListFilter.trim().toLowerCase()
@@ -342,13 +380,15 @@ export default function App() {
     const q = symbolListFilter.trim()
     if (!q) return
     if (filteredRows.length === 0) {
-      if (selectedSymbol != null) setSelectedSymbol(null)
+      if (selectedSymbol != null) {
+        setSelectedBySegment((prev) => ({ ...prev, [activeSegment]: null }))
+      }
       return
     }
     if (!selectedSymbol || !filteredRows.some((r) => r.symbol === selectedSymbol)) {
-      setSelectedSymbol(filteredRows[0].symbol)
+      setSelectedBySegment((prev) => ({ ...prev, [activeSegment]: filteredRows[0].symbol }))
     }
-  }, [symbolListFilter, filteredRows, selectedSymbol])
+  }, [activeSegment, symbolListFilter, filteredRows, selectedSymbol])
 
   const selected = useMemo(() => {
     if (!sortedRows.length) return null
@@ -378,7 +418,7 @@ export default function App() {
       if (e.key === 'ArrowDown') {
         if (idx >= filteredRows.length - 1) return
         const next = filteredRows[idx + 1].symbol
-        setSelectedSymbol(next)
+        setSelectedBySegment((prev) => ({ ...prev, [activeSegment]: next }))
         queueMicrotask(() =>
           scrollListToSymbol(symbolListNavRef.current, next, { focusButton: true }),
         )
@@ -387,7 +427,7 @@ export default function App() {
       }
       if (idx <= 0) return
       const prev = filteredRows[idx - 1].symbol
-      setSelectedSymbol(prev)
+      setSelectedBySegment((prev) => ({ ...prev, [activeSegment]: prev }))
       queueMicrotask(() =>
         scrollListToSymbol(symbolListNavRef.current, prev, { focusButton: true }),
       )
@@ -396,11 +436,22 @@ export default function App() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [rec.isSuccess, sortedRows.length, rightPaneView, filteredRows, selected?.symbol])
+  }, [activeSegment, rec.isSuccess, sortedRows.length, rightPaneView, filteredRows, selected?.symbol])
+
+  useEffect(() => {
+    if (!rec.isSuccess) return
+    const topSymbol = sortRecommendations(rec.data.recommendations)[0]?.symbol
+    if (!topSymbol) return
+    void queryClient.prefetchQuery({
+      queryKey: ['ohlc', activeSegment, topSymbol],
+      queryFn: () => fetchOhlcSeries(topSymbol, activeSegment),
+    })
+  }, [activeSegment, queryClient, rec.data, rec.isSuccess])
 
   const universeCount = rec.data?.universe.length
 
   const dataErrorsFingerprint = rec.data?.dataErrors?.join('\u0001') ?? ''
+  const manualRefreshErrorSnapshot = manualRefreshErrorSnapshotBySegment[activeSegment]
 
   const visibleDataErrors = useMemo(() => {
     const raw = rec.data?.dataErrors ?? []
@@ -409,6 +460,7 @@ export default function App() {
   }, [dataErrorsFingerprint, manualRefreshErrorSnapshot, rec.data])
 
   const visibleDataErrorsKey = visibleDataErrors.join('\u0001')
+  const dismissedDataErrorsKey = dismissedDataErrorsKeyBySegment[activeSegment]
   const showDataWarnings =
     visibleDataErrors.length > 0 && dismissedDataErrorsKey !== visibleDataErrorsKey
 
@@ -427,20 +479,55 @@ export default function App() {
                 )}
               </div>
               <p className="mt-2 whitespace-nowrap text-lg font-medium leading-snug text-zinc-400 sm:text-xl overflow-x-auto">
-                Multi-strategy, data-backed signals on Indian equities — weighted, explainable, chart-ready.
+                {activeSegment === 'crypto'
+                  ? 'Multi-strategy, data-backed signals on crypto markets — weighted, explainable, chart-ready.'
+                  : 'Multi-strategy, data-backed signals on Indian equities — weighted, explainable, chart-ready.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              {updatedAt && (
-                <time className="text-lg font-medium text-zinc-300" dateTime={updatedAt.toISOString()}>
-                  {updatedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+              {updatedAtBySegment[activeSegment] && (
+                <time
+                  className="text-lg font-medium text-zinc-300"
+                  dateTime={updatedAtBySegment[activeSegment]!.toISOString()}
+                >
+                  {updatedAtBySegment[activeSegment]!.toLocaleString(undefined, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
                 </time>
               )}
+              <div className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/70 p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveSegment('indian')}
+                  className={`rounded-lg px-3 py-2 text-base font-bold transition ${
+                    activeSegment === 'indian'
+                      ? 'bg-zinc-700 text-white'
+                      : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200'
+                  }`}
+                >
+                  Indian
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSegment('crypto')}
+                  className={`rounded-lg px-3 py-2 text-base font-bold transition ${
+                    activeSegment === 'crypto'
+                      ? 'bg-zinc-700 text-white'
+                      : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200'
+                  }`}
+                >
+                  Crypto
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  setManualRefreshErrorSnapshot(rec.data?.dataErrors ? [...rec.data.dataErrors] : [])
-                  setDismissedDataErrorsKey(null)
+                  setManualRefreshErrorSnapshotBySegment((prev) => ({
+                    ...prev,
+                    [activeSegment]: rec.data?.dataErrors ? [...rec.data.dataErrors] : [],
+                  }))
+                  setDismissedDataErrorsKeyBySegment((prev) => ({ ...prev, [activeSegment]: null }))
                   void rec.refetch()
                 }}
                 disabled={rec.isFetching}
@@ -470,7 +557,12 @@ export default function App() {
           <div className="relative mt-4 rounded-xl border-2 border-amber-600/50 bg-amber-950/35 p-5 pr-14 text-xl text-amber-50">
             <button
               type="button"
-              onClick={() => setDismissedDataErrorsKey(visibleDataErrorsKey)}
+              onClick={() =>
+                setDismissedDataErrorsKeyBySegment((prev) => ({
+                  ...prev,
+                  [activeSegment]: visibleDataErrorsKey,
+                }))
+              }
               className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-950/80 text-2xl font-light leading-none text-amber-100 hover:bg-amber-900/90"
               aria-label="Dismiss data warnings"
             >
@@ -508,7 +600,9 @@ export default function App() {
                   autoComplete="off"
                   spellCheck={false}
                   value={symbolListFilter}
-                  onChange={(e) => setSymbolListFilter(e.target.value)}
+                  onChange={(e) =>
+                    setFilterBySegment((prev) => ({ ...prev, [activeSegment]: e.target.value }))
+                  }
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter') return
                     const sym =
@@ -548,7 +642,7 @@ export default function App() {
                   row={row}
                   active={selected?.symbol === row.symbol && rightPaneView === 'symbol'}
                   onSelect={() => {
-                    setSelectedSymbol(row.symbol)
+                    setSelectedBySegment((prev) => ({ ...prev, [activeSegment]: row.symbol }))
                     setRightPaneView('symbol')
                   }}
                 />
@@ -585,13 +679,13 @@ export default function App() {
               {rightPaneView === 'guide' ? (
                 <StrategyGuide />
               ) : selected ? (
-                <DetailPane row={selected} />
+                <DetailPane row={selected} segment={activeSegment} />
               ) : symbolListFilter.trim() && filteredRows.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-2xl font-medium text-zinc-300">
                   <p>No symbols match &ldquo;{symbolListFilter.trim()}&rdquo;.</p>
                   <button
                     type="button"
-                    onClick={() => setSymbolListFilter('')}
+                    onClick={() => setFilterBySegment((prev) => ({ ...prev, [activeSegment]: '' }))}
                     className="rounded-xl border border-zinc-600 bg-zinc-800 px-5 py-2.5 text-lg font-semibold text-white hover:bg-zinc-700"
                   >
                     Clear filter

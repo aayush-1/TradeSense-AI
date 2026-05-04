@@ -1,3 +1,5 @@
+export type MarketSegment = 'indian' | 'crypto'
+
 export type OverallRecommendation = {
   buy: boolean
   weightedScore: number

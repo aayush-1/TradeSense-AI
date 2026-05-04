@@ -217,3 +217,64 @@ RTNINDIA
 SUZLON
 TMPV
 TMCV
+
+# --- NBFC, SFB & fin add-ons (CHOLA/CHOLAFIN, majors above) ---
+AIIL
+CREDITACC
+EQUITASBNK
+FIVESTAR
+UJJIVANSFB
+
+# --- Infra, EPC & project execution (NCC/IRB/KPIL; PNCINFRA in swing list above) ---
+AHLUCONT
+HGINFRA
+IRB
+ITDCEM
+JKIL
+KNRCON
+KPIL
+NCC
+
+# --- Power, renewables, transmission & select infra plays (KPIL = former Kalpataru Power T&D; NSE symbol KPIL) ---
+INOXGREEN
+SWSOLAR
+TECHNOE
+ZODIAC
+
+# --- Chemicals & specialty manufacturing (chemicals block above) ---
+ACHEM
+AMIORG
+NEOGEN
+ROSSARI
+
+# --- Logistics & road transport (BLUEDART above) ---
+TCIEXP
+VRLLOG
+
+# --- Hospitals & care (FORTIS/MEDANTA above) ---
+HCG
+RAINBOW
+
+# --- EMS, aerospace electronics & defense-tech supply chain (DIXON/MOSCHIP above) ---
+AVALON
+CYIENTDLM
+DATAPATTNS
+
+# --- Value retail & electronics retail (TRENT above) ---
+AVL
+EMIL
+VMART
+
+# --- Defense & aerospace (HAL/BDL/MAZDOCK; COCHINSHIP above) ---
+DCXINDIA
+IDEAFORGE
+PREMEXPLN
+ROSSTECH
+
+# --- AI / data-center & digital infra enablers (HAPPSTMND/NET names) ---
+AURIONPRO
+NETWEB
+
+# --- Smaller / order-book & momentum watchlist (higher risk) ---
+QPOWER
+RUDRA

@@ -26,7 +26,10 @@ export function humanizeDataErrorMessage(raw: string): string {
     /timed?\s*out/i.test(detail)
 
   if (looksTechnical) {
-    return `${symbol}: Could not refresh market data for this symbol, so strategy evaluations may not have completed successfully.`
+    if (/429|TOO_MANY_REQUESTS|rate limit/i.test(detail)) {
+      return `${symbol}: Data provider rate-limited this request (429). Using cached data if available; try refresh again shortly.`
+    }
+    return `${symbol}: Could not refresh market data for this symbol (${detail}). Strategy evaluations may be incomplete.`
   }
 
   return raw

@@ -2,9 +2,9 @@ package ai.tradesense.web;
 
 import ai.tradesense.MarketDataConstants;
 import ai.tradesense.domain.Ohlc;
-import ai.tradesense.market.yahoo.YahooFinanceMarketDataProvider;
+import ai.tradesense.market.MarketSegment;
 import ai.tradesense.storage.OhlcFileStore;
-import ai.tradesense.universe.UniverseProvider;
+import ai.tradesense.universe.SegmentUniverseProvider;
 import ai.tradesense.web.dto.OhlcBarResponse;
 import ai.tradesense.web.dto.OhlcSeriesResponse;
 import org.springframework.http.HttpStatus;
@@ -23,23 +23,29 @@ import java.util.List;
 public class OhlcChartService {
 
     private static final ZoneId NSE_CALENDAR = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId CRYPTO_CALENDAR = ZoneId.of("UTC");
+    private static final int CRYPTO_CHART_HISTORY_MONTHS = 12;
 
     private final OhlcFileStore ohlcFileStore;
-    private final UniverseProvider universeProvider;
+    private final SegmentUniverseProvider segmentUniverseProvider;
 
-    public OhlcChartService(OhlcFileStore ohlcFileStore, UniverseProvider universeProvider) {
+    public OhlcChartService(OhlcFileStore ohlcFileStore, SegmentUniverseProvider segmentUniverseProvider) {
         this.ohlcFileStore = ohlcFileStore;
-        this.universeProvider = universeProvider;
+        this.segmentUniverseProvider = segmentUniverseProvider;
     }
 
-    public OhlcSeriesResponse loadChartSeries(String symbol) throws IOException {
-        String sym = YahooFinanceMarketDataProvider.normalizeSymbol(symbol);
-        if (!universeProvider.getSymbols().contains(sym)) {
+    public OhlcSeriesResponse loadChartSeries(MarketSegment segment, String symbol) throws IOException {
+        String sym = segmentUniverseProvider.normalizeSymbol(segment, symbol);
+        if (!segmentUniverseProvider.getSymbols(segment).contains(sym)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Symbol not in universe: " + sym);
         }
-        List<Ohlc> raw = new ArrayList<>(ohlcFileStore.load(sym));
+        List<Ohlc> raw = new ArrayList<>(ohlcFileStore.load(segment, sym));
         raw.sort(Comparator.comparing(Ohlc::date));
-        LocalDate cutoff = LocalDate.now(NSE_CALENDAR).minusMonths(MarketDataConstants.ANALYSIS_HISTORY_MONTHS);
+        ZoneId zone = segment == MarketSegment.CRYPTO ? CRYPTO_CALENDAR : NSE_CALENDAR;
+        int historyMonths = segment == MarketSegment.CRYPTO
+                ? CRYPTO_CHART_HISTORY_MONTHS
+                : MarketDataConstants.ANALYSIS_HISTORY_MONTHS;
+        LocalDate cutoff = LocalDate.now(zone).minusMonths(historyMonths);
         List<OhlcBarResponse> bars = new ArrayList<>();
         for (Ohlc o : raw) {
             if (o.date().isBefore(cutoff)) {

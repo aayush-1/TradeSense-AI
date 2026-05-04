@@ -4,7 +4,8 @@ import ai.tradesense.MarketDataConstants;
 import ai.tradesense.config.AtrVolatilityGateProperties;
 import ai.tradesense.config.RecommendationStrategyProperties;
 import ai.tradesense.domain.Ohlc;
-import ai.tradesense.market.MarketDataProvider;
+import ai.tradesense.market.MarketSegment;
+import ai.tradesense.market.SegmentedMarketDataProvider;
 import ai.tradesense.recommendation.AtrVolatilityNotes;
 import ai.tradesense.recommendation.RecommendationContext;
 import ai.tradesense.recommendation.RecommendationStrategy;
@@ -14,12 +15,14 @@ import ai.tradesense.recommendation.levels.TradeLevelsCalculator;
 import ai.tradesense.recommendation.levels.TradeLevelsInput;
 import ai.tradesense.storage.OhlcFileStore;
 import ai.tradesense.storage.OhlcSeriesMerge;
-import ai.tradesense.universe.UniverseProvider;
+import ai.tradesense.universe.SegmentUniverseProvider;
 import ai.tradesense.web.dto.OverallRecommendation;
 import ai.tradesense.web.dto.RecommendationResponse;
 import ai.tradesense.web.dto.StrategyRecommendation;
 import ai.tradesense.web.dto.SymbolRecommendation;
 import ai.tradesense.web.dto.TradeLevelsSuggestion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -31,9 +34,11 @@ import java.util.List;
 /** Builds recommendation responses by hydrating OHLC and running all {@link RecommendationStrategy} beans. */
 @Service
 public class RecommendationService {
+    private static final Logger log = LoggerFactory.getLogger(RecommendationService.class);
 
     /** NSE session dates on OHLC bars use this zone (see {@link ai.tradesense.market.yahoo.YahooChartJsonParser}). */
     private static final ZoneId NSE_CALENDAR = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId CRYPTO_CALENDAR = ZoneId.of("UTC");
 
     /**
      * Minimum trailing calendar span (inclusive of {@code fetchTo}) when calling Yahoo. Narrow windows (especially
@@ -46,9 +51,10 @@ public class RecommendationService {
      * calendar days before {@code toDate} (covers weekends/holidays; NSE “today” vs last bar on Fri is still ok).
      */
     private static final int STALE_OK_LAST_BAR_MAX_AGE_DAYS = 5;
+    private static final int CRYPTO_ANALYSIS_HISTORY_MONTHS = 12;
 
-    private final UniverseProvider universeProvider;
-    private final MarketDataProvider marketDataProvider;
+    private final SegmentUniverseProvider segmentUniverseProvider;
+    private final SegmentedMarketDataProvider segmentedMarketDataProvider;
     private final OhlcFileStore ohlcFileStore;
     private final List<RecommendationStrategy> strategies;
     private final WeightedRecommendationAggregator aggregator;
@@ -57,16 +63,16 @@ public class RecommendationService {
     private final List<TradeLevelsCalculator> tradeLevelsCalculators;
 
     public RecommendationService(
-            UniverseProvider universeProvider,
-            MarketDataProvider marketDataProvider,
+            SegmentUniverseProvider universeProvider,
+            SegmentedMarketDataProvider marketDataProvider,
             OhlcFileStore ohlcFileStore,
             List<RecommendationStrategy> strategies,
             WeightedRecommendationAggregator aggregator,
             RecommendationStrategyProperties recommendationStrategyProperties,
             AtrVolatilityGateProperties atrVolatilityGateProperties,
             List<TradeLevelsCalculator> tradeLevelsCalculators) {
-        this.universeProvider = universeProvider;
-        this.marketDataProvider = marketDataProvider;
+        this.segmentUniverseProvider = universeProvider;
+        this.segmentedMarketDataProvider = marketDataProvider;
         this.ohlcFileStore = ohlcFileStore;
         this.strategies =
                 strategies.stream().sorted(Comparator.comparing(RecommendationStrategy::strategyId)).toList();
@@ -82,22 +88,24 @@ public class RecommendationService {
      * months on disk, merges new Yahoo bars (incoming wins on same date). Runs every {@link RecommendationStrategy} and
      * aggregates a weighted overall buy/skip; no raw OHLC in the response.
      */
-    public RecommendationResponse buildResponse() {
-        LocalDate toDate = LocalDate.now(NSE_CALENDAR);
-        LocalDate analysisStart = toDate.minusMonths(MarketDataConstants.ANALYSIS_HISTORY_MONTHS);
-        List<String> universe = universeProvider.getSymbols();
+    public RecommendationResponse buildResponse(MarketSegment segment) {
+        LocalDate toDate = LocalDate.now(zoneFor(segment));
+        LocalDate analysisStart = toDate.minusMonths(analysisMonthsFor(segment));
+        List<String> universe = segmentUniverseProvider.getSymbols(segment);
         List<SymbolRecommendation> recommendations = new ArrayList<>();
         List<String> fetchErrors = new ArrayList<>();
 
         for (String symbol : universe) {
             try {
-                HydrationSummary h = hydrateAndPersist(symbol, analysisStart, toDate);
+                HydrationSummary h = hydrateAndPersist(segment, symbol, analysisStart, toDate);
                 List<Ohlc> series = h.series();
                 Double referencePrice =
                         series.isEmpty() ? null : series.get(series.size() - 1).close();
                 recommendations.add(buildSymbolRecommendation(symbol, series, referencePrice, h.marketDataNote()));
             } catch (Exception e) {
-                fetchErrors.add(symbol + ": " + e.getMessage());
+                String error = rootCauseMessage(e);
+                log.warn("Recommendation hydration failed for segment={} symbol={}: {}", segment, symbol, error, e);
+                fetchErrors.add(symbol + ": " + error);
             }
         }
 
@@ -157,9 +165,9 @@ public class RecommendationService {
                 symbol, referencePrice, overall, List.copyOf(perStrategy), List.copyOf(notes), tradeLevels);
     }
 
-    private HydrationSummary hydrateAndPersist(String symbol, LocalDate analysisStart, LocalDate toDate)
+    private HydrationSummary hydrateAndPersist(MarketSegment segment, String symbol, LocalDate analysisStart, LocalDate toDate)
             throws Exception {
-        List<Ohlc> loaded = new ArrayList<>(ohlcFileStore.load(symbol));
+        List<Ohlc> loaded = new ArrayList<>(ohlcFileStore.load(segment, symbol));
         loaded.sort(Comparator.comparing(Ohlc::date));
         LocalDate lastOnDisk = loaded.isEmpty() ? null : loaded.get(loaded.size() - 1).date();
 
@@ -181,9 +189,8 @@ public class RecommendationService {
             if (last.isBefore(toDate)) {
                 fetchFrom = last.plusDays(1);
             } else {
-                // Same calendar day as "to" (or newer on disk): still ask the provider for [toDate, toDate] so the
-                // latest candle can replace the prior row for that date when saved.
-                fetchFrom = toDate;
+                // Already have today's row on disk; avoid a redundant provider call.
+                fetchFrom = toDate.plusDays(1);
                 fetchTo = toDate;
             }
         }
@@ -206,7 +213,7 @@ public class RecommendationService {
         Exception liveFetchFailure = null;
         if (providerInvoked) {
             try {
-                fetched = fetchHistoricalWithSameDayFallback(symbol, fetchFrom, fetchTo, toDate);
+                fetched = fetchHistoricalWithSameDayFallback(segment, symbol, fetchFrom, fetchTo, toDate);
             } catch (Exception ex) {
                 liveFetchFailed = true;
                 liveFetchFailure = ex;
@@ -229,7 +236,7 @@ public class RecommendationService {
                                 + ").",
                         liveFetchFailure);
             }
-            ohlcFileStore.save(symbol, merged);
+            ohlcFileStore.save(segment, symbol, merged);
             LocalDate last = merged.get(merged.size() - 1).date();
             String note =
                     "Live market data refresh failed; recommendations use persisted daily OHLC (latest session "
@@ -238,7 +245,7 @@ public class RecommendationService {
             return new HydrationSummary(merged, note);
         }
 
-        ohlcFileStore.save(symbol, merged);
+        ohlcFileStore.save(segment, symbol, merged);
         String marketDataNote =
                 describeHydration(lastOnDisk, fetchFrom, fetchTo, toDate, providerInvoked, fetched);
         return new HydrationSummary(merged, marketDataNote);
@@ -309,10 +316,10 @@ public class RecommendationService {
      * fall back to yesterday only, then to a two-day strip ending yesterday, and merge those bars instead.
      */
     private List<Ohlc> fetchHistoricalWithSameDayFallback(
-            String symbol, LocalDate fetchFrom, LocalDate fetchTo, LocalDate nseToday) throws Exception {
+            MarketSegment segment, String symbol, LocalDate fetchFrom, LocalDate fetchTo, LocalDate nseToday) throws Exception {
         boolean narrowTodayOnly = fetchFrom.equals(fetchTo) && fetchTo.equals(nseToday);
         try {
-            List<Ohlc> first = marketDataProvider.getHistoricalData(symbol, fetchFrom, fetchTo);
+            List<Ohlc> first = segmentedMarketDataProvider.getHistoricalData(segment, symbol, fetchFrom, fetchTo);
             if (!narrowTodayOnly || !first.isEmpty()) {
                 return first;
             }
@@ -323,7 +330,7 @@ public class RecommendationService {
         }
         LocalDate yesterday = nseToday.minusDays(1);
         try {
-            List<Ohlc> second = marketDataProvider.getHistoricalData(symbol, yesterday, yesterday);
+            List<Ohlc> second = segmentedMarketDataProvider.getHistoricalData(segment, symbol, yesterday, yesterday);
             if (!second.isEmpty()) {
                 return second;
             }
@@ -331,6 +338,32 @@ public class RecommendationService {
             // try wider window
         }
         LocalDate twoDaysAgo = nseToday.minusDays(2);
-        return marketDataProvider.getHistoricalData(symbol, twoDaysAgo, yesterday);
+        return segmentedMarketDataProvider.getHistoricalData(segment, symbol, twoDaysAgo, yesterday);
+    }
+
+    private static ZoneId zoneFor(MarketSegment segment) {
+        if (segment == MarketSegment.CRYPTO) {
+            return CRYPTO_CALENDAR;
+        }
+        return NSE_CALENDAR;
+    }
+
+    private static int analysisMonthsFor(MarketSegment segment) {
+        if (segment == MarketSegment.CRYPTO) {
+            return CRYPTO_ANALYSIS_HISTORY_MONTHS;
+        }
+        return MarketDataConstants.ANALYSIS_HISTORY_MONTHS;
+    }
+
+    private static String rootCauseMessage(Throwable error) {
+        Throwable current = error;
+        String message = current.getMessage();
+        while (current.getCause() != null) {
+            current = current.getCause();
+            if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                message = current.getMessage();
+            }
+        }
+        return message != null && !message.isBlank() ? message : error.toString();
     }
 }
